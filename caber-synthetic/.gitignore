@@ -1,0 +1,7 @@
+# Inversion-run artifacts (regenerable)
+_dobs_cache.npy
+_mopt_test.npy
+_mrec_full.npy
+_run_*.log
+_plot_*.png
+InversionModel_*.npz
