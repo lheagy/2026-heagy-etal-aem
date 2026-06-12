@@ -1,48 +1,46 @@
-# Original Implementation from John Weis, see
+# Original implementation by John Weis:
 # https://github.com/johnweis0480/Parametric_Pytorch
+#
+# Refactored for inversion use:
+#   * dense Jacobians (no csr wrapping of dense results),
+#   * xyz cached as a torch tensor once,
+#   * float64 throughout,
+#   * log semi-axes (positivity + better-scaled Jacobian columns),
+#   * boundary sharpness is a fixed hyperparameter (no longer in `m`),
+#     so the boundary-sharpness <-> interior-value degeneracy is removed,
+#   * the redundant `c` level-set parameter is dropped; the boundary is
+#     fixed at the level set <x-x0, M (x-x0)> = 1, so r_x, r_y, r_z are
+#     the actual semi-axes (NOT full axes as in the original).
+#
+# Parameter vector layout (length 1 + 10 * n_ellipsoids):
+#     m[0]                       = background property
+#     m[1 + 10*i : 11 + 10*i]    = per-ellipsoid block i, with entries
+#         (log_rx, log_ry, log_rz,
+#          phi_x, phi_y, phi_z,
+#          x_0, y_0, z_0,
+#          p_interior)
 import numpy as np
 import torch
 from torch.autograd.functional import jacobian, jvp
-import scipy.sparse as sp
 from simpeg.maps import BaseParametric
 
+
 class PytorchMapping(BaseParametric):
+    """Differentiable parametric mapping with a PyTorch forward transform.
+
+    Subclasses implement ``forward_transform(self, m_t)``: a function that
+    takes a 1-D torch tensor of model parameters and returns a 1-D torch
+    tensor of property values on the active cells. Derivatives are
+    obtained via forward-mode autodiff, which is the right choice when
+    ``nP`` is small and the output is large.
     """
-    Original Implementation from John Weis, see
-    https://github.com/johnweis0480/Parametric_Pytorch
-    """
 
-    def __init__(self, mesh=None, nP=None, active_cells= None, forward_transform=None, inverse_transform=None,params = None,**kwargs):
-        self.mesh = mesh
-
-        self._nP = nP
-        self.forward_transform = forward_transform
-        self.inverse_transform = inverse_transform
-        self.active_cells = active_cells
-        self.params = params
-        self.xyz = np.vstack((self.x,self.y,self.z)).T
-
-    def _transform(self, m):
-        '''
-        model parameters (parametric or latent dimensionality)
-        '''
-        m_loc = torch.Tensor(m)
-
-        if self.params is not None:
-            return self.forward_transform(m_loc,self.params,self.xyz).numpy()
-        else:
-            return self.forward_transform(m_loc).numpy()
-
-
-
-    def deriv(self, m, v=None):
-        m_loc = torch.Tensor(m)
-
-        if v is not None:
-            v_loc = torch.Tensor(v)
-            return sp.csr_matrix(jvp(lambda m_loc: self.forward_transform(m_loc,self.params,self.xyz),m_loc,v_loc)[1].numpy())
-        else:
-            return sp.csr_matrix(jacobian(lambda m_loc: self.forward_transform(m_loc,self.params,self.xyz),m_loc,strategy='forward-mode',vectorize=True).numpy())
+    def __init__(self, mesh, nP, active_cells=None, **kwargs):
+        super().__init__(mesh=mesh, active_cells=active_cells, **kwargs)
+        self._nP = int(nP)
+        # cache active cell centers as a (3, n_pts) float64 torch tensor
+        xyz = np.vstack((self.x, self.y, self.z))
+        self._xyz = torch.as_tensor(xyz, dtype=torch.float64)
 
     @property
     def nP(self):
@@ -50,96 +48,137 @@ class PytorchMapping(BaseParametric):
 
     @property
     def shape(self):
-        if self.active_cells is not None:
-            return (self.active_cells.sum(), self._nP)
-        else:
-            return (self.mesh.n_cells, self._nP)
+        return (len(self.x), self._nP)
 
-#Parametric Ellipse function, could be any parameterization, needs to be written in pytorch
-def ellipsoid_torch_transform(m, params, xyz):
-    xyz = xyz
-    c = params[0]
-    n_ellipse = params[1]
-    p_0 = m[0]
+    def forward_transform(self, m_t):
+        raise NotImplementedError
 
-    X = torch.tensor(xyz[:, 0])
-    Y = torch.tensor(xyz[:, 1])
-    Z = torch.tensor(xyz[:, 2])
+    def _transform(self, m):
+        m_t = torch.as_tensor(m, dtype=torch.float64)
+        with torch.no_grad():
+            return self.forward_transform(m_t).numpy()
 
-    xyz = torch.vstack((X, Y, Z))
+    def deriv(self, m, v=None):
+        m_t = torch.as_tensor(m, dtype=torch.float64)
+        if v is not None:
+            v_t = torch.as_tensor(v, dtype=torch.float64)
+            return jvp(self.forward_transform, m_t, v_t)[1].numpy()
+        return jacobian(
+            self.forward_transform, m_t,
+            strategy="forward-mode", vectorize=True,
+        ).numpy()
 
-    # Collect a "membership logit" and a property value for the background and
-    # for each ellipsoid, then combine them with a softmax over the *logits*
-    # (how far inside each ellipsoid a point is) rather than over the values.
-    # This selects an ellipsoid wherever it is active, regardless of whether
-    # its value is above OR below the background -- unlike a softmax over the
-    # values, which can only ever favor the larger value.
-    n_pts = xyz.shape[1]
-    logits = [torch.zeros(n_pts, dtype=torch.float64)]  # background: logit 0
-    prop_values = [p_0]                                 # background value
 
-    for i in range(n_ellipse):
-        rx, ry, rz, phix, phiy, phiz, x_0, y_0, z_0, p_1, a = m[1 + i * 11:1 + (i + 1) * 11]
+def _rotation_matrix(phi_x, phi_y, phi_z):
+    """R = Rx @ Ry @ Rz with intrinsic Euler angles (radians)."""
+    one = torch.ones_like(phi_x)
+    zero = torch.zeros_like(phi_x)
+    cx, sx = torch.cos(phi_x), torch.sin(phi_x)
+    cy, sy = torch.cos(phi_y), torch.sin(phi_y)
+    cz, sz = torch.cos(phi_z), torch.sin(phi_z)
+    Rx = torch.stack([
+        torch.stack([one,  zero, zero]),
+        torch.stack([zero,   cx,  -sx]),
+        torch.stack([zero,   sx,   cx]),
+    ])
+    Ry = torch.stack([
+        torch.stack([  cy, zero,   sy]),
+        torch.stack([zero,  one, zero]),
+        torch.stack([ -sy, zero,   cy]),
+    ])
+    Rz = torch.stack([
+        torch.stack([  cz,  -sz, zero]),
+        torch.stack([  sz,   cz, zero]),
+        torch.stack([zero, zero,  one]),
+    ])
+    return Rx @ Ry @ Rz
 
-        xyz_0 = torch.vstack((x_0, y_0, z_0))
-
-        S = torch.zeros((3, 3), dtype=torch.float64)
-        S[0, 0] = 2 / rx
-        S[1, 1] = 2 / ry
-        S[2, 2] = 2 / rz
-
-        Rx = torch.zeros_like(S)
-        Rx[0, 0] = 1
-        Rx[1, 1] = torch.cos(phix)
-        Rx[1, 2] = -torch.sin(phix)
-        Rx[2, 2] = torch.cos(phix)
-        Rx[2, 1] = torch.sin(phix)
-
-        Ry = torch.zeros_like(S)
-        Ry[1, 1] = 1
-        Ry[0, 0] = torch.cos(phiy)
-        Ry[2, 0] = -torch.sin(phiy)
-        Ry[2, 2] = torch.cos(phiy)
-        Ry[0, 2] = torch.sin(phiy)
-
-        Rz = torch.zeros_like(S)
-        Rz[2, 2] = 1
-        Rz[0, 0] = torch.cos(phiz)
-        Rz[0, 1] = -torch.sin(phiz)
-        Rz[1, 1] = torch.cos(phiz)
-        Rz[1, 0] = torch.sin(phiz)
-
-        T = S @ Rx @ Ry @ Rz
-        M = T.T @ T
-
-        xyz_m_xyz_0 = xyz - xyz_0
-        tau = M @ (xyz_m_xyz_0)
-
-        tau = c - torch.sum(xyz_m_xyz_0 * tau, dim=0)
-
-        # tau > 0 inside the ellipsoid, so this logit is large there. The
-        # factor of 2 reproduces the boundary half-width of the original
-        # 0.5 * (1 + tanh(a * tau)) transition.
-        logits.append(2.0 * a * tau)
-        prop_values.append(p_1)
-
-    logits = torch.stack(logits)            # (n_ellipse + 1, n_pts)
-    prop_values = torch.stack(prop_values)  # (n_ellipse + 1,)
-    # Softmax over the logits is a smooth, differentiable partition of unity
-    # that picks the most-inside ellipsoid (or the background) at each point.
-    weights = torch.softmax(logits, dim=0)  # numerically stable
-    p = torch.sum(weights * prop_values[:, None], dim=0)
-    return p
 
 class ParametricEllipsoid(PytorchMapping):
+    """Parametric ellipsoid(s) embedded in a homogeneous background.
+
+    The boundary is the level set
+        (x - x_0)^T M (x - x_0) = 1
+    with
+        M = R^T diag(1/r_x^2, 1/r_y^2, 1/r_z^2) R,
+        R = Rx @ Ry @ Rz.
+    Inside/outside is smoothed with a softmax over per-ellipsoid logits,
+    giving a partition of unity that handles interior values either above
+    or below the background.
+
+    Boundary sharpness is controlled by ``boundary_sharpness`` and is
+    *fixed* (not inverted for) -- inverting for it together with the
+    interior property created a degeneracy where a diffuse boundary +
+    extreme interior value mimics a sharp boundary + correct value.
+
+    Semi-axis convention: ``r_x, r_y, r_z`` are the **semi-axes** (the
+    distance from center to the ellipsoid surface along each principal
+    axis). The original implementation used "full axes" (2 * semi-axis);
+    callers porting from the old layout should halve their starting
+    semi-axis magnitudes accordingly, or equivalently use
+    ``log(old_r / 2)`` instead of ``log(old_r)``.
+    """
+
+    BLOCK_SIZE = 10
+    BLOCK_NAMES = (
+        "log_rx", "log_ry", "log_rz",
+        "phi_x", "phi_y", "phi_z",
+        "x_0", "y_0", "z_0",
+        "p_interior",
+    )
+
     def __init__(
-            self, mesh=None, active_cells= None, smoothness_factor=1.,
+        self,
+        mesh,
+        active_cells=None,
+        n_ellipsoids=1,
+        boundary_sharpness=1.0,
     ):
+        self.n_ellipsoids = int(n_ellipsoids)
+        self.boundary_sharpness = float(boundary_sharpness)
         super().__init__(
             mesh=mesh,
-            nP=12,
+            nP=1 + self.BLOCK_SIZE * self.n_ellipsoids,
             active_cells=active_cells,
-            forward_transform=ellipsoid_torch_transform,
-            inverse_transform=None,
-            params=[smoothness_factor, 1]  # c and n_ellipse
         )
+
+    def _block(self, m_t, i):
+        start = 1 + i * self.BLOCK_SIZE
+        return m_t[start : start + self.BLOCK_SIZE]
+
+    def forward_transform(self, m_t):
+        p_bg = m_t[0]
+        n_pts = self._xyz.shape[1]
+
+        logits = [torch.zeros(n_pts, dtype=torch.float64)]
+        props = [p_bg]
+
+        for i in range(self.n_ellipsoids):
+            b = self._block(m_t, i)
+            log_rx, log_ry, log_rz = b[0], b[1], b[2]
+            phi_x,  phi_y,  phi_z  = b[3], b[4], b[5]
+            x_0,    y_0,    z_0    = b[6], b[7], b[8]
+            p_in                   = b[9]
+
+            inv_r = torch.stack([
+                torch.exp(-log_rx),
+                torch.exp(-log_ry),
+                torch.exp(-log_rz),
+            ])
+            S = torch.diag(inv_r)
+            R = _rotation_matrix(phi_x, phi_y, phi_z)
+            T = S @ R
+            M = T.T @ T
+
+            center = torch.stack([x_0, y_0, z_0]).unsqueeze(1)
+            dx = self._xyz - center
+            # tau > 0 inside the ellipsoid, boundary at tau = 0
+            tau = 1.0 - torch.sum(dx * (M @ dx), dim=0)
+
+            logits.append(self.boundary_sharpness * tau)
+            props.append(p_in)
+
+        logits = torch.stack(logits)            # (n_ellipsoids + 1, n_pts)
+        props = torch.stack(props)              # (n_ellipsoids + 1,)
+        weights = torch.softmax(logits, dim=0)  # numerically stable
+        return torch.sum(weights * props[:, None], dim=0)
