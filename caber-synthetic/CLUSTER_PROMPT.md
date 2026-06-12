@@ -131,8 +131,13 @@ artifact. So the issue isn't the starting model — the **data alone
 doesn't constrain the spatial distribution well enough**.
 
 **Hypothesis for the cluster session:** the 30-station survey × 20
-channels × 20 m base cells is too coarse to break the σ×volume
-degeneracy. Need more data and/or a finer mesh.
+channels is too sparse to break the σ×volume degeneracy. The 20 m
+base cell size is fine — what's likely too small is the **fine-cell
+footprint** around each source on the *local* meshes. Each local
+mesh is refined with `padding_cells_by_level=[2, 2, 2]`, which means
+only 2 cells of fine refinement before the cells start coarsening.
+For a dipping target that extends laterally, the source needs to
+"see" the target through a wider band of fine cells.
 
 ## What NOT to do (already explored, didn't help)
 
@@ -150,10 +155,15 @@ above CG is the geology/data resolution.
 
 ## Things to try (in rough priority order)
 
-1. **More receivers in y** (denser y-line spacing). Currently only 3
+1. **Wider fine-cell footprint on the local meshes.** Change
+   `padding_cells_by_level=[2, 2, 2]` to `[4, 2, 2]` in
+   `build_local_meshes` (and try also in `build_global_mesh`). This
+   doubles the lateral extent of the finest-cell zone around each
+   source without going to a finer base cell — keeps cell count
+   manageable but gives each source a broader view of the target.
+   **Try this first**; it's cheap and addresses the most likely cause.
+2. **More receivers in y** (denser y-line spacing). Currently only 3
    y-lines (−200/0/+200) so any feature elongated in y is undersampled.
-2. **Finer base mesh** (10 m instead of 20 m). Reduces discretization
-   noise in the recovered model.
 3. **More time channels** (40 instead of 20). More direct measurement
    of the diffusion profile.
 4. **Moving sources** (more "station footprint" coverage, e.g. shift
@@ -161,6 +171,9 @@ above CG is the geology/data resolution.
 5. **`reference_model_in_smooth=True`** (we deferred this — it's a
    strong prior, but worth testing once we know other things aren't
    the bottleneck).
+
+**Don't** drop the base cell size below 20 m — it isn't the
+bottleneck and triples the cell count for marginal benefit.
 
 For each: predict whether it will (a) break the σ×volume degeneracy
 or (b) just smooth out the artifacts you already see. If (b), try
