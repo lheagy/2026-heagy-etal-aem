@@ -1,0 +1,11 @@
+{
+  "mode": "global",
+  "n_sources": 100,
+  "global_cells": 52340,
+  "baseline_mb": 387.5,
+  "after_mesh_mb": 495.3,
+  "peak_mb": 11278.4,
+  "peak_over_baseline_mb": 10891.0,
+  "dpred_time_s": 1500.8,
+  "n_data": 2000
+}

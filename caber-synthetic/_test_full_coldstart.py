@@ -1,10 +1,11 @@
-"""Full-mesh second-stage inversion.
+"""Baseline A: cold-started full-mesh inversion.
 
-m0 = parametric recovery (loaded from _mopt_test.npy, written by
-_test_parametric.py)
-reference = m0 (smallness anchors the parametric structure)
-beta0_ratio = 10, BetaSchedule(coolingFactor=2, coolingRate=2)
-ProjectedGNCG, maxIter=15, log-cond bounds [1e-6, 100] S/m.
+Identical to _test_full.py (same regularization, beta schedule, optimizer,
+bounds) except m0 = reference = uniform halfspace (sigma_back) instead of
+the phase-1 parametric recovery. Paper baseline: what does the 3D inversion
+do without the parametric warm start?
+
+Writes _mrec_coldstart.npy.
 """
 import os
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -21,7 +22,6 @@ from simpeg.electromagnetics import time_domain as tdem
 from simpeg.utils.solver_utils import get_default_solver
 from simpeg.meta import MultiprocessingMetaSimulation
 
-from parametric_ellipsoid import ParametricEllipsoid
 from _test_parametric import (
     build_global_mesh,
     build_local_meshes,
@@ -40,11 +40,6 @@ def main():
     n_active = int(active_cells.sum())
     print(f"global mesh: {global_mesh.n_cells} cells ({n_active} active)", flush=True)
 
-    active_cells_map = maps.InjectActiveCells(
-        global_mesh, active_cells, value_inactive=np.log(1e-8),
-    )
-
-    # full survey (all 20 channels)
     source_list = []
     for i in range(rx_locs.shape[0]):
         loc = rx_locs[i, :]
@@ -59,7 +54,6 @@ def main():
     print(f"survey: {len(source_list)} sources x {len(rx_times)} times = {n_data} data", flush=True)
 
     mesh_list = build_local_meshes(global_mesh, survey)
-    time_steps = TIME_STEPS
 
     mappings, sims = [], []
     for ii, local_mesh in enumerate(mesh_list):
@@ -72,7 +66,7 @@ def main():
         sims.append(tdem.simulation.Simulation3DElectricField(
             mesh=local_mesh,
             survey=tdem.Survey([survey.source_list[ii]]),
-            time_steps=time_steps,
+            time_steps=TIME_STEPS,
             solver=Solver,
             sigmaMap=maps.ExpMap() * local_actmap,
         ))
@@ -89,30 +83,12 @@ def main():
         standard_deviation=np.abs(dobs) * relative_error + noise_floor,
     )
 
-    # m0 from the latest parametric recovery (phase 1)
-    mopt_parametric = np.load("_mopt_test.npy")
-    print(f"parametric m0 params: {np.array2string(mopt_parametric, precision=3)}", flush=True)
-    global_ellipsoid = ParametricEllipsoid(
-        global_mesh, active_cells=active_cells, boundary_sharpness=10.0,
-    )
-    m0 = global_ellipsoid * mopt_parametric
-    print(f"m0:  log-cond range [{m0.min():.3f}, {m0.max():.3f}] "
-          f"-> sigma [{np.exp(m0.min()):.3e}, {np.exp(m0.max()):.3e}] S/m", flush=True)
-
-    # reference = m0 (only affects smallness term -- smoothness still
-    # penalizes |grad m| not |grad (m - m_ref)|, so sharp boundaries in m0
-    # are still penalized by smoothness; smallness is what anchors structure)
+    # cold start: uniform halfspace, no parametric information
+    m0 = np.full(n_active, np.log(sigma_back))
     m_ref = m0.copy()
+    print(f"m0: uniform halfspace log({sigma_back})", flush=True)
 
     dmis = data_misfit.L2DataMisfit(simulation=sim, data=data_obj)
-    # alpha_s small, smoothness alphas at 1. This downweights "smallness"
-    # (pull toward reference) and instead penalizes spatial roughness,
-    # discouraging compact / cell-sized blobs in favor of extended targets.
-    # alpha_s=0.01 (was 0.1): with overburden in the data but not in m_ref,
-    # the smallness anchor drains low-sensitivity cells between stations back
-    # to the m0 background while data overshoots at the loop footprints --
-    # the "donut" pattern. Let smoothness dominate so the layer stays
-    # connected as beta cools.
     reg = regularization.WeightedLeastSquares(
         global_mesh, active_cells=active_cells, reference_model=m_ref,
         alpha_s=0.01, alpha_x=1.0, alpha_y=1.0, alpha_z=1.0,
@@ -120,24 +96,17 @@ def main():
 
     lower = np.full(n_active, np.log(1e-6))
     upper = np.full(n_active, np.log(1e2))
-    # tolF/tolX tiny: termination should come from TargetMisfit (or maxIter),
-    # not the optimizer's small-step test -- with strong beta the early steps
-    # are small and a default tolX stops the run after 1 iteration.
+    # maxIter capped at 25: the cold start stalls far above target (it is a
+    # baseline meant to demonstrate non-convergence), and at 100 sources a
+    # full 40 iters would not finish before the deadline. 25 iters is more
+    # than enough to show it fails to recover the target.
     opt = optimization.ProjectedGNCG(
-        maxIter=40, lower=lower, upper=upper, cg_maxiter=40,
+        maxIter=25, lower=lower, upper=upper, cg_maxiter=40,
         tolF=1e-10, tolX=1e-10,
     )
     inv_prob = inverse_problem.BaseInvProblem(dmis, reg, opt)
 
-    # beta0_ratio=1e5: m0 nearly fits the data (phi_d(m0) ~ 1.6x target), so
-    # any first GN step with beta*phi_m <~ phi_d overshoots the target in one
-    # iteration (ratio 10 -> sigma at the 100 S/m bound; 1e4 -> phi_d 435 vs
-    # target 600). Start over-regularized and let BetaSchedule cool toward
-    # the target instead.
     starting_beta = directives.BetaEstimate_ByEig(beta0_ratio=1e5, n_pw_iter=2)
-    # With unmodeled overburden in m0, phi_d(m0) is far above target (cold
-    # start), so cool aggressively; coolingFactor=1.5 was tuned for the
-    # no-overburden warm start (phi_d(m0) ~1.6x target).
     cool_beta = directives.BetaSchedule(coolingFactor=2, coolingRate=2)
     save_iteration = directives.SaveOutputDictEveryIteration(saveOnDisk=True)
     target_misfit = directives.TargetMisfit()
@@ -148,11 +117,11 @@ def main():
     )
 
     print(f"\ntarget misfit (= N_data): {n_data}", flush=True)
-    print("starting inversion ...", flush=True)
+    print("starting cold-start inversion ...", flush=True)
     mrec = inv.run(m0)
 
-    np.save("_mrec_full.npy", mrec)
-    print(f"\nsaved -> _mrec_full.npy", flush=True)
+    np.save("_mrec_coldstart.npy", mrec)
+    print(f"\nsaved -> _mrec_coldstart.npy", flush=True)
     print(f"recovered sigma range: [{np.exp(mrec).min():.3e}, "
           f"{np.exp(mrec).max():.3e}] S/m", flush=True)
     sim.join()

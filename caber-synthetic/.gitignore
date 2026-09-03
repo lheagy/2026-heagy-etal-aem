@@ -5,3 +5,12 @@ _mrec_full.npy
 _run_*.log
 _plot_*.png
 InversionModel_*.npz
+
+# movies / field figures (regenerable, large)
+*.mp4
+*.gif
+fig_fields_*.png
+
+# ParaView exports (regenerable via _export_vtk.py)
+*.vtu
+*.vtp

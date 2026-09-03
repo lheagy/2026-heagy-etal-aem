@@ -1,6 +1,8 @@
-"""Regenerate dobs (new sigma_target, new dip) and plot:
-1. -dB/dt vs x for the central y-line, all time channels
-2. anomaly = (target - background) / background, showing target visibility
+"""Regenerate dobs and plot:
+1. -dB/dt vs x per y-line, all time channels (full model and layered bg)
+2. anomaly = (full - bg_overburden) / |bg_overburden|: target visibility
+   over the layered (halfspace + overburden) background
+3. central-station sounding: overburden response decay vs target emergence
 """
 import os
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -19,8 +21,9 @@ from _test_parametric import (
     build_global_mesh,
     build_local_meshes,
     build_true_model,
-    sigma_back, sigma_target, sigma_air,
+    sigma_back, sigma_target, sigma_air, sigma_overburden,
     rx_locs, rx_times, rx_x, rx_y,
+    TIME_STEPS,
 )
 from simpeg import maps as _maps  # alias to avoid shadowing in closure
 
@@ -50,7 +53,7 @@ def main():
     print(f"survey: {len(source_list)} sources x {len(rx_times)} times = {n_data} data", flush=True)
 
     mesh_list = build_local_meshes(global_mesh, survey)
-    time_steps = [(1e-5, 20), (3e-5, 20), (1e-4, 20)]
+    time_steps = TIME_STEPS
 
     mappings, sims = [], []
     for ii, local_mesh in enumerate(mesh_list):
@@ -69,31 +72,33 @@ def main():
         ))
     sim = MultiprocessingMetaSimulation(sims, mappings)
 
-    # --- target model & background-only model ---
+    # --- three models: full (target + overburden), layered bg, halfspace ---
     sigma_full = build_true_model(global_mesh)
-    sigma_bg_only = np.ones(global_mesh.n_cells) * sigma_air
-    sigma_bg_only[global_mesh.cell_centers[:, 2] < 0] = sigma_back
-
-    model_full = np.log(sigma_full[active_cells])
-    model_bg   = np.log(sigma_bg_only[active_cells])
+    sigma_ovb = build_true_model(global_mesh, include_target=False)
+    sigma_bg_only = build_true_model(
+        global_mesh, include_target=False, include_overburden=False,
+    )
 
     import time
-    print("computing dpred for target model...", flush=True)
-    t0 = time.time()
-    dobs_full = sim.dpred(model_full)
-    print(f"  done in {time.time() - t0:.1f} s", flush=True)
+    dpreds = {}
+    for name, sig in [("full", sigma_full), ("bg+ovb", sigma_ovb),
+                      ("halfspace", sigma_bg_only)]:
+        print(f"computing dpred for {name} model...", flush=True)
+        t0 = time.time()
+        dpreds[name] = sim.dpred(np.log(sig[active_cells]))
+        print(f"  done in {time.time() - t0:.1f} s", flush=True)
+    dobs_full = dpreds["full"]
     np.save("_dobs_cache.npy", dobs_full)
-    print("  cached -> _dobs_cache.npy", flush=True)
-
-    print("computing dpred for background-only model...", flush=True)
-    t0 = time.time()
-    dobs_bg = sim.dpred(model_bg)
-    print(f"  done in {time.time() - t0:.1f} s", flush=True)
+    print("  cached full-model dobs -> _dobs_cache.npy", flush=True)
 
     n_t = len(rx_times)
     d_full = dobs_full.reshape(len(rx_y), len(rx_x), n_t)
-    d_bg   = dobs_bg.reshape(len(rx_y), len(rx_x), n_t)
-    anomaly = (d_full - d_bg) / np.abs(d_bg)
+    d_ovb  = dpreds["bg+ovb"].reshape(len(rx_y), len(rx_x), n_t)
+    d_bg   = dpreds["halfspace"].reshape(len(rx_y), len(rx_x), n_t)
+    # target visibility over the LAYERED background
+    anomaly = (d_full - d_ovb) / np.abs(d_ovb)
+    # overburden signature relative to the halfspace
+    ovb_anomaly = (d_ovb - d_bg) / np.abs(d_bg)
 
     # --- plot ---
     ny = len(rx_y)
@@ -113,24 +118,25 @@ def main():
         ax.set_title(f"y={y_val:.0f} m: target (all 20 channels)")
         ax.grid(True, alpha=0.3)
 
-        # col 1: background only
+        # col 1: layered background (halfspace dashed for reference)
         ax = axes[j, 1]
         for ti in range(n_t):
-            ax.plot(rx_x, -d_bg[j, :, ti], color=cmap_times[ti], lw=1)
+            ax.plot(rx_x, -d_ovb[j, :, ti], color=cmap_times[ti], lw=1)
+            ax.plot(rx_x, -d_bg[j, :, ti], color=cmap_times[ti], lw=0.6, ls="--")
         ax.set_yscale("log")
         ax.set_xlabel("x (m)")
-        ax.set_title(f"y={y_val:.0f} m: background only")
+        ax.set_title(f"y={y_val:.0f} m: bg+overburden (halfspace dashed)")
         ax.grid(True, alpha=0.3)
 
-        # col 2: relative anomaly
+        # col 2: target anomaly relative to the layered background
         ax = axes[j, 2]
         for ti in range(n_t):
             ax.plot(rx_x, anomaly[j, :, ti], color=cmap_times[ti], lw=1)
         ax.axhline(0.05, color="r", ls="--", lw=0.8, label="5% noise")
         ax.axhline(-0.05, color="r", ls="--", lw=0.8)
         ax.set_xlabel("x (m)")
-        ax.set_ylabel("(target - bg) / |bg|")
-        ax.set_title(f"y={y_val:.0f} m: anomaly")
+        ax.set_ylabel("(full - bg_ovb) / |bg_ovb|")
+        ax.set_title(f"y={y_val:.0f} m: target anomaly")
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize=8)
 
@@ -139,11 +145,47 @@ def main():
     plt.savefig(out, dpi=110)
     print(f"saved -> {out}")
 
+    # --- central-station sounding: overburden decay vs target emergence ---
+    jc = len(rx_y) // 2
+    ic = int(np.argmin(np.abs(rx_x)))
+    fig3, ax3 = plt.subplots(1, 2, figsize=(12, 4.5))
+    ax3[0].loglog(rx_times, -d_bg[jc, ic, :], "k--", label="halfspace")
+    ax3[0].loglog(rx_times, -d_ovb[jc, ic, :], "C0", label="+ overburden")
+    ax3[0].loglog(rx_times, -d_full[jc, ic, :], "C3", label="+ target")
+    ax3[0].set_xlabel("time (s)")
+    ax3[0].set_ylabel("-dB/dt (T/s)")
+    ax3[0].set_title(f"sounding at (x,y)=({rx_x[ic]:.0f},{rx_y[jc]:.0f})")
+    ax3[0].legend()
+    ax3[0].grid(True, alpha=0.3, which="both")
+
+    ax3[1].semilogx(rx_times, np.abs(ovb_anomaly[jc, ic, :]), "C0",
+                    label="|overburden vs halfspace|")
+    ax3[1].semilogx(rx_times, np.abs(anomaly[jc, ic, :]), "C3",
+                    label="|target vs bg+overburden|")
+    ax3[1].axhline(0.05, color="r", ls="--", lw=0.8, label="5% noise")
+    ax3[1].set_xlabel("time (s)")
+    ax3[1].set_ylabel("relative anomaly")
+    ax3[1].set_title("overburden decay vs target emergence")
+    ax3[1].legend(fontsize=8)
+    ax3[1].grid(True, alpha=0.3, which="both")
+    plt.tight_layout()
+    plt.savefig("_plot_data_sounding.png", dpi=110)
+    print("saved -> _plot_data_sounding.png")
+
     # summarize anomaly visibility
-    print(f"\nanomaly statistics (target σ = {sigma_target} S/m, dip 45°):")
-    print(f"  max relative anomaly: {anomaly.max():+.2f}")
-    print(f"  min relative anomaly: {anomaly.min():+.2f}")
-    print(f"  fraction of |anomaly| > 5%: {(np.abs(anomaly) > 0.05).mean():.2%}")
+    print(f"\nanomaly statistics (target σ = {sigma_target} S/m, "
+          f"overburden σ = {sigma_overburden} S/m):")
+    print(f"  target  anomaly (vs layered bg): max {anomaly.max():+.2f}, "
+          f"min {anomaly.min():+.2f}, frac |.|>5%: "
+          f"{(np.abs(anomaly) > 0.05).mean():.2%}")
+    print(f"  ovb     anomaly (vs halfspace):  max {ovb_anomaly.max():+.2f}, "
+          f"min {ovb_anomaly.min():+.2f}")
+    with np.printoptions(precision=2, suppress=False):
+        print(f"  central-station |ovb anomaly| per channel:\n"
+              f"    {np.abs(ovb_anomaly[jc, ic, :])}")
+        print(f"  central-station |target anomaly| per channel:\n"
+              f"    {np.abs(anomaly[jc, ic, :])}")
+    sim.join()
 
     # --- true model slices ---
     from _test_parametric import target_z

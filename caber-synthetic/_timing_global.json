@@ -1,0 +1,1 @@
+{"approach": "global", "mesh_cells": 52340, "mesh_active": 42284, "n_time_steps": 80, "n_data": 20, "dpred_times_s": [97.3, 96.04, 95.696], "dpred_time_median_s": 96.04, "rss_baseline_mb": 589.2, "rss_peak_mb": 1698.8, "rss_dpred_increment_mb": 1109.6}

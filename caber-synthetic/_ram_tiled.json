@@ -1,0 +1,17 @@
+{
+  "mode": "tiled",
+  "n_sources": 100,
+  "n_processes": 48,
+  "global_cells": 52340,
+  "local_cells_total": 543832,
+  "local_cells_mean": 5438.32,
+  "local_cells_max": 5832,
+  "baseline_mb": 386.6,
+  "after_meshes_mb": 1724.8,
+  "meshes_only_mb": 1338.2,
+  "after_build_mb": 9018.4,
+  "peak_mb": 13483.1,
+  "peak_over_baseline_mb": 13096.6,
+  "dpred_time_s": 32.4,
+  "n_data": 2000
+}

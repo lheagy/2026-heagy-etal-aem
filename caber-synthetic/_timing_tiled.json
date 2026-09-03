@@ -1,0 +1,1 @@
+{"approach": "tiled", "mesh_cells": 5510, "mesh_active": 3602, "n_time_steps": 80, "n_data": 20, "dpred_times_s": [2.799, 2.709, 2.707], "dpred_time_median_s": 2.709, "rss_baseline_mb": 602.3, "rss_peak_mb": 663.3, "rss_dpred_increment_mb": 61.0}

@@ -19,7 +19,7 @@ from _test_parametric import (
     target_z,
     rx_locs,
 )
-from _test_full import MOPT_PARAMETRIC
+MOPT_PARAMETRIC = np.load("_mopt_test.npy")
 
 
 def main():
