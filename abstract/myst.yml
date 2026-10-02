@@ -1,0 +1,70 @@
+# See docs at: https://mystmd.org/guide/frontmatter
+version: 1
+project:
+  id: ubcgif-2026-heagy-etal-aem
+  title: 3D hybrid-parametric inversion of AEM data accelerated by tiling
+  description: Extended abstract presented at the 9th International Airborne Electromagnetics Workshop
+  authors:
+    - name: Lindsey J. Heagy
+      email: lheagy@eoas.ubc.ca
+      corresponding: true
+      orcid: 0000-0002-1551-5926
+      affiliation:
+        id: ubc
+        name: Department of Earth, Ocean and Atmospheric Sciences, University of British Columbia, Vancouver, British Columbia
+    - name: Joseph Capriotti
+      orcid: 0000-0003-4762-5377
+      affiliation: Department of Geophysics, Colorado School of Mines
+    - name: Seogi Kang
+      email: seogi.kang@umanitoba.ca
+      orcid: 0000-0002-9963-936X
+      affiliation: Department of Earth Sciences, University of Manitoba
+    - name: Dominique Fournier
+      orcid: 0000-0003-3285-3465
+      affiliation: Mira Geoscience
+    - name: John M. Weis
+      email: jweis@eoas.ubc.ca
+      orcid: 0009-0003-6820-064X
+      affiliation: ubc
+    - name: Johnathan Kuttai
+      email: jkutt@eoas.ubc.ca
+      orcid: 0009-0006-6356-944X
+      affiliation: ubc
+    - name: Devin C. Cowan
+      orcid: 0000-0002-0089-402X
+      affiliation: ubc
+    - name: Santiago Soler
+      email: ssoler@eos.ubc.ca
+      orcid: 0000-0001-9202-5317
+      affiliation: ubc
+  # doi: DOI
+  # arxiv: ARXIV-ID
+  github: https://github.com/ubcgif/2026-heagy-etal-aem
+  date: 2026-09-07 # date of presentation
+  # license: CC-BY-4.0  # uncomment this and the line below if open access
+  # open_access: true
+  venue:
+    title: "AEM 2026: 9th International Airborne Electromagnetics Workshop"
+    url: https://www.airborneem.org/
+  keywords:
+    - electromagnetics
+    - inversion
+    - tiling
+    - parametric inversion
+  abbreviations:
+    AEM: airborne electromagnetics
+    TDEM: time-domain electromagnetics
+  thumbnail: thumbnail.png
+  banner: banner.png
+  numbering:
+    headings: true
+  bibliography: refs.bib
+site:
+  template: article-theme
+  actions:
+    - title: pdf
+      url: ./heagy-et-al-2026-aem.pdf
+      static: true
+    - title: slides
+      url: ./Heagy-et-al-AEM.pdf
+      static: true
