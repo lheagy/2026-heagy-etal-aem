@@ -3,7 +3,7 @@ version: 1
 project:
   id: ubcgif-2026-heagy-etal-aem
   title: 3D hybrid-parametric inversion of AEM data accelerated by tiling
-  description: Extended abstract presented at the 9th International Airborne Electromagnetics Workshop
+  description: Presented at the 9th International Airborne Electromagnetics Workshop
   authors:
     - name: Lindsey J. Heagy
       email: lheagy@eoas.ubc.ca
