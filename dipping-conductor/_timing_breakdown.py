@@ -37,7 +37,7 @@ from simpeg import maps
 from simpeg.electromagnetics import time_domain as tdem
 from simpeg.utils.solver_utils import get_default_solver
 
-from _test_parametric import (
+from dipping_target_setup import (
     build_global_mesh, build_true_model, rx_times, rx_y, TIME_STEPS,
 )
 

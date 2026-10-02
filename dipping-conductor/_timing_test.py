@@ -25,7 +25,7 @@ from simpeg import maps
 from simpeg.electromagnetics import time_domain as tdem
 from simpeg.utils.solver_utils import get_default_solver
 
-from _test_parametric import (
+from dipping_target_setup import (
     build_global_mesh, build_local_meshes, build_true_model,
     rx_locs, rx_times, TIME_STEPS,
 )
@@ -99,7 +99,7 @@ def main():
         solver=Solver, sigmaMap=maps.ExpMap() * actmap,
     )
 
-    # _test_parametric pins MKL=1 at import; force the requested count at
+    # dipping_target_setup pins MKL=1 at import; force the requested count at
     # runtime with threadpool_limits (overrides the env) and confirm it.
     from threadpoolctl import threadpool_limits, threadpool_info
 

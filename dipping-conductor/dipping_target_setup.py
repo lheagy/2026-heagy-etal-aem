@@ -1,11 +1,11 @@
-"""Focused test of the parametric ellipsoid inversion.
+"""Shared setup (mesh, true model, survey) and Phase-1 parametric inversion.
 
 Replicates the notebook setup through the parametric inversion only,
 so we can iterate quickly on starting model / sharpness / error / iter
 choices without paying for the full-mesh second stage.
 
 Run with the py311 env active:
-    python _test_parametric.py
+    python dipping_target_setup.py
 """
 import os
 os.environ["OMP_NUM_THREADS"] = "1"

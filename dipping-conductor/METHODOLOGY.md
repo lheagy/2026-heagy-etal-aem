@@ -276,7 +276,7 @@ mesh, for one sounding.
   pymatsolver `0.3.1` (MKL Pardiso), NumPy `2.1.3`, SciPy `1.15.1`, Python
   `3.11`.
 - **Scripts (this study):**
-  - `_test_parametric.py` — true model, survey, meshes, Phase-1 parametric
+  - `dipping_target_setup.py` — true model, survey, meshes, Phase-1 parametric
     inversion; `parametric_ellipsoid.py` — the `ParametricEllipsoid` map.
   - `_test_1d_forward3d.py` — forward-models the stitched-1D model on the 3D
     mesh (`_dpred_1d_on_3d.npy`, used in the data-fit figure).

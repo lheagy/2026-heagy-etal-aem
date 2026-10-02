@@ -128,6 +128,6 @@ cores against the process-level parallelism. Omitting this is easy and costly.
 
 ---
 
-Implementation: `_test_parametric.py` (`build_global_mesh`,
+Implementation: `dipping_target_setup.py` (`build_global_mesh`,
 `build_local_meshes`, and the `sim_full` / `sim_parametric` construction at
 lines 205–275).

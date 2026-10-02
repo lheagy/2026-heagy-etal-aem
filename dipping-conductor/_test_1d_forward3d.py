@@ -10,7 +10,7 @@ This tests self-consistency of the stitched 1D: it fits each sounding with a 1D
 forward, but does the assembled model reproduce the actual 3D response?
 
 Writes _sigma_1d_on_3d.npy (full-mesh conductivity) and _dpred_1d_on_3d.npy.
-Run with the 40 m survey config in _test_parametric.py (the 1D survey).
+Run with the 40 m survey config in dipping_target_setup.py (the 1D survey).
 """
 import os
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -25,7 +25,7 @@ from simpeg.electromagnetics import time_domain as tdem
 from simpeg.utils.solver_utils import get_default_solver
 from simpeg.meta import MultiprocessingMetaSimulation
 
-from _test_parametric import (
+from dipping_target_setup import (
     build_global_mesh, build_local_meshes,
     rx_locs, rx_times, rx_x, rx_y, sigma_back, sigma_air, TIME_STEPS,
 )

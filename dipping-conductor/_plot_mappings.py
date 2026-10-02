@@ -1,7 +1,7 @@
 """Figure: the SimPEG mapping chain for the parametric (tiled) simulation.
 
 This is the literal chain `sim_parametric` runs, in application order
-(_test_parametric.py:267,273 -- `param_mappings = tile_map * global_ellipsoid`
+(dipping_target_setup.py:267,273 -- `param_mappings = tile_map * global_ellipsoid`
 and `sigmaMap = ExpMap * local_actmap`):
 
   m (11 params)
@@ -27,7 +27,7 @@ from simpeg import maps
 from simpeg.electromagnetics import time_domain as tdem
 
 from parametric_ellipsoid import ParametricEllipsoid
-from _test_parametric import (
+from dipping_target_setup import (
     build_global_mesh, build_local_meshes, rx_times,
 )
 

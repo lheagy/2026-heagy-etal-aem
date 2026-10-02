@@ -10,7 +10,7 @@ Usage:
   python _ram_test.py tiled   [n_processes]   # 100 local meshes, tiled dpred
   python _ram_test.py global                   # one global-mesh dpred
 
-Run with the 40 m survey config in _test_parametric.py (100 soundings).
+Run with the 40 m survey config in dipping_target_setup.py (100 soundings).
 Writes _ram_tiled.json / _ram_global.json.
 """
 import os
@@ -30,7 +30,7 @@ from simpeg.electromagnetics import time_domain as tdem
 from simpeg.utils.solver_utils import get_default_solver
 from simpeg.meta import MultiprocessingMetaSimulation
 
-from _test_parametric import (
+from dipping_target_setup import (
     build_global_mesh, build_local_meshes,
     rx_locs, rx_times, sigma_back, TIME_STEPS,
 )
