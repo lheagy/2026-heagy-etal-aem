@@ -1,12 +1,12 @@
 # 3D hybrid-parametric inversion of AEM data accelerated by tiling
 
-Code, cached results, and figures for
-
 > Heagy, L. J., Capriotti, J., Kang, S., Fournier, D., Weis, J., Kuttai, J.,
 > Cowan, D., and Soler, S. R. (2026). *3D hybrid-parametric inversion of AEM
 > data accelerated by tiling.* AEM 2026.
 
-The extended abstract and the slides are in [`abstract/`](abstract/).
+**Abstract** 
+Airborne electromagnetic (AEM) surveys collect dense and, high-quality data, yet are most often inverted under a 1D layered-earth assumption that breaks down over geologically complex targets. Full 3D inversion can resolve these settings but is computationally expensive. We present a tiled 3D inversion workflow, implemented in the open-source SimPEG framework, in which each source is simulated on a small local OcTree mesh, and the per-source simulations are distributed in parallel. In our example, a single-sounding forward runs about an order of magnitude faster than on the global mesh, and distributing the solves accelerates the full survey by roughly two orders of magnitude, at comparable peak memory. Sensitivities are propagated through composable mappings, so the Jacobian is only ever computed on the small local meshes. The same code supports both voxel and parametric models. On a synthetic dipping conductor beneath a conductive overburden, a stitched 1D inversion smears and under-recovers the target and a naive cold-started 3D inversion stalls above the target misfit, whereas a two-stage hybrid-parametric inversion, warm-started from a recovered ellipsoid, converges quickly and recovers a coherent dipping conductor with the overburden. The framework also enables an efficient 3D forward check on 1D results, indicating where 1D suffices and where 3D is warranted.
+
 
 ## Layout
 
