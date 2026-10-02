@@ -4,7 +4,7 @@ Representative per-iteration timings for the three inversions, taken from the
 saved `SaveOutputDictEveryIteration` file timestamps of the production runs
 (ovbU5 geometry: 80 m survey, 50 sources tiled across the multiprocessing pool).
 
-**Caveat:** unlike the single-sounding forward comparison (`_forward_timing.md`),
+**Caveat:** unlike the single-sounding forward comparison (`COMPUTE_COST.md` §6),
 these are *not* controlled benchmarks — they come from the iteration timestamps
 of the production runs, so treat them as representative / order-of-magnitude.
 

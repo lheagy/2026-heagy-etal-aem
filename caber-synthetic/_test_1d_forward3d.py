@@ -30,7 +30,7 @@ from _test_parametric import (
     rx_locs, rx_times, rx_x, rx_y, sigma_back, sigma_air, TIME_STEPS,
 )
 
-# 1D layer geometry (matches _test_1d_single)
+# 1D layer geometry (matches the stitched-1D inversion)
 _CS, _CORE, _NPAD, _PF = 25.0, 400.0, 12, 1.3
 THICK = discretize.utils.unpack_widths(
     [(_CS, int(np.ceil(_CORE / _CS))), (_CS, _NPAD, _PF)])

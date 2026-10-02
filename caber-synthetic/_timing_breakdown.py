@@ -2,7 +2,7 @@
 
 Instruments `Simulation3DElectricField.fields()` to record, for every one of the
 80 time steps: matrix assembly, factorization (only when dt changes), and the
-solve. Writes JSON; `_build_timing_breakdown_report.py` turns it into a table.
+solve. Writes JSON; the tables are in COMPUTE_COST.md.
 
 The solver (pymatsolver Pardiso) is constructed with `factor=False` and
 factorizes lazily inside the first solve, so the wrapper calls the underlying
@@ -99,7 +99,7 @@ def main():
     m_true = np.log(sigma_true[active])
 
     # sources: the 80 m survey, truncated to --n-src (1 = the station over the
-    # target, matching _forward_timing.md)
+    # target, matching _timing_test.py)
     rx_x_80 = (np.linspace(-500, 500, 26))[3:-3][::2]
     all_locs = np.array([[x, y, 30.0] for y in rx_y for x in rx_x_80])
     if args.n_src == 1:
@@ -129,7 +129,7 @@ def main():
 
     # Warm-up: the first fields() call also builds discretize's mesh operators
     # (edge curl, inner-product matrices), which are then cached on the mesh.
-    # _forward_timing.md reports the median of repeated calls, i.e. warm; time
+    # _timing_test.py reports the median of repeated calls, i.e. warm; time
     # the warm-up separately so the one-time cost is visible rather than hidden.
     t0 = time.perf_counter()
     f = sim.fields(m_true)

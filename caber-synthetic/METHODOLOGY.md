@@ -278,12 +278,15 @@ mesh, for one sounding.
 - **Scripts (this study):**
   - `_test_parametric.py` — true model, survey, meshes, Phase-1 parametric
     inversion; `parametric_ellipsoid.py` — the `ParametricEllipsoid` map.
-  - `_test_full.py` — Phase-2 full 3D inversion (reads the Phase-1 model).
-  - `_test_full_coldstart.py` — cold-start 3D baseline.
-  - `_test_1d_single.py` / `_test_1d_stitched.py` — 1D single-sounding test and
-    stitched run.
-  - `_timing_test.py` + `_build_timing_report.py` → `_forward_timing.md`.
-  - `_build_figures_notebook.py` → `dipping_target_figures.ipynb` (all figures).
+  - `_test_1d_forward3d.py` — forward-models the stitched-1D model on the 3D
+    mesh (`_dpred_1d_on_3d.npy`, used in the data-fit figure).
+  - `_timing_test.py`, `_ram_test.py`, `_timing_breakdown.py` — compute-cost
+    benchmarks; results in `COMPUTE_COST.md` and `_iteration_timing.md`.
+  - `dipping_target_figures.ipynb` — all figures; `fields_3_soundings.ipynb` —
+    field snapshots and movies; `_plot_mappings.py` — the mappings figure.
+  - The Phase-2, cold-start and stitched-1D production inversions were run on a
+    cluster with scripts that were not preserved; their outputs (`_mrec_ovbU5.npy`,
+    `_models_1d_40m.npy`, `_dobs_{40,80}m.npy`, `_iters_*/`) are the record.
 - **Per-iteration output:** every 3D inversion saves
   `SaveOutputDictEveryIteration` (`iter, beta, phi_d, phi_m, f, m, dpred`) so
   convergence curves and per-iteration models/predicted data are recoverable.

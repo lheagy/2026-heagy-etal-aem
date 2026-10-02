@@ -1,7 +1,5 @@
 # Inversion-run artifacts (regenerable)
 _dobs_cache.npy
-_mopt_test.npy
-_mrec_full.npy
 _run_*.log
 _plot_*.png
 InversionModel_*.npz
@@ -11,6 +9,6 @@ InversionModel_*.npz
 *.gif
 fig_fields_*.png
 
-# ParaView exports (regenerable via _export_vtk.py)
+# ParaView exports
 *.vtu
 *.vtp
